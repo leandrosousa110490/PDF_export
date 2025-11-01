@@ -5,13 +5,8 @@
       "description": "Extract invoice number from invoices",
       "patterns": [
         {
-          "before_text": "Invoice Number:",
-          "after_text": "Date:",
-          "case_sensitive": false
-        },
-        {
-          "before_text": "Invoice #:",
-          "after_text": "Date:",
+          "before_text": "ABC Cor",
+          "after_text": "ration 123",
           "case_sensitive": false
         },
         {

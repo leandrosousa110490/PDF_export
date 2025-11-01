@@ -139,6 +139,30 @@ The extractor now supports **OR statements** for more flexible pattern matching.
 
 This flexibility ensures higher extraction success rates across different document formats!
 
+### Exact Character Matching
+
+The extractor uses **exact character-level matching**, not word boundaries. This means:
+
+#### ✅ **Partial Word Extraction Supported:**
+- **Before text**: `"com"` **After text**: `"ny"` 
+- **Source**: `"Company: Innovation"`
+- **Result**: `"pa"` (extracts the portion between "com" and "ny" within "Company")
+
+#### ✅ **Within Single Word Extraction:**
+- **Before text**: `"Inno"` **After text**: `"tion"`
+- **Source**: `"Innovation Partners"`  
+- **Result**: `"va"` (extracts "va" from within "Innovation")
+
+#### ✅ **Cross-Word Extraction:**
+- **Before text**: `"INV"` **After text**: `"024"`
+- **Source**: `"Invoice Number: INV-2024010"`
+- **Result**: `"oice Number: INV-2"` (extracts from "Invoice" to "2024")
+
+#### 🎯 **Key Benefits:**
+- **Precise Control**: Extract exact character sequences regardless of word boundaries
+- **Flexible Patterns**: Works within words, across words, or spanning multiple words
+- **Case Sensitivity**: Configurable per pattern for exact or flexible matching
+
 #### Settings:
 
 - **`max_extraction_length`**: Maximum characters to extract
