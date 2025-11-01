@@ -97,20 +97,40 @@ class TextExtractor:
         except Exception as e:
             print(f"❌ Error reading file {file_path}: {e}")
             return {}
-        
+
         results = {}
         configurations = self.config.get('configurations', [])
         
         for config in configurations:
             config_name = config.get('name', 'Unknown')
-            before_text = config.get('before_text', '')
-            after_text = config.get('after_text', '')
-            case_sensitive = config.get('case_sensitive', False)
+            extracted_value = None
             
-            extracted_value = self.extract_value_between_text(
-                text_content, before_text, after_text, case_sensitive
-            )
+            # Check if config uses new patterns structure (OR statements)
+            if 'patterns' in config:
+                # Try each pattern until one succeeds
+                for pattern in config['patterns']:
+                    before_text = pattern.get('before_text', '')
+                    after_text = pattern.get('after_text', '')
+                    case_sensitive = pattern.get('case_sensitive', False)
+                    
+                    extracted_value = self.extract_value_between_text(
+                        text_content, before_text, after_text, case_sensitive
+                    )
+                    
+                    # If we found a value, stop trying other patterns
+                    if extracted_value is not None:
+                        break
+            else:
+                # Legacy single pattern support (backward compatibility)
+                before_text = config.get('before_text', '')
+                after_text = config.get('after_text', '')
+                case_sensitive = config.get('case_sensitive', False)
+                
+                extracted_value = self.extract_value_between_text(
+                    text_content, before_text, after_text, case_sensitive
+                )
             
+            # Use default value if nothing was found
             if extracted_value is None:
                 extracted_value = self.settings.get('default_value_if_not_found', 'NOT_FOUND')
             

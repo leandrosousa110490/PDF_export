@@ -70,8 +70,10 @@ def extract_text_from_pdf(pdf_path):
                     all_text += page_text
             
             # Format text as one continuous line
-            # Replace multiple whitespace characters (including newlines) with single spaces
-            formatted_text = ' '.join(all_text.split())
+            # First, replace line breaks with spaces to ensure proper word separation
+            text_with_spaces = all_text.replace('\n', ' ').replace('\r', ' ')
+            # Then normalize multiple whitespace characters to single spaces
+            formatted_text = ' '.join(text_with_spaces.split())
             
             return formatted_text if formatted_text.strip() else None
             

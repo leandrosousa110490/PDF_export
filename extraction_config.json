@@ -3,44 +3,118 @@
     {
       "name": "Invoice_Number",
       "description": "Extract invoice number from invoices",
-      "before_text": "Customer Name:",
-      "after_text": "Smith",
-      "case_sensitive": false
+      "patterns": [
+        {
+          "before_text": "Invoice Number:",
+          "after_text": "Date:",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Invoice #:",
+          "after_text": "Date:",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "INV-",
+          "after_text": " ",
+          "case_sensitive": false
+        }
+      ]
     },
     {
       "name": "Total_Amount",
       "description": "Extract total amount from invoices",
-      "before_text": "Total Amount:",
-      "after_text": "$",
-      "case_sensitive": false
+      "patterns": [
+        {
+          "before_text": "Total Amount:",
+          "after_text": "Payment",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Total:",
+          "after_text": "Payment",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Amount Due:",
+          "after_text": "Payment",
+          "case_sensitive": false
+        }
+      ]
     },
     {
       "name": "Company_Name",
       "description": "Extract company name from documents",
-      "before_text": "Company:",
-      "after_text": "Invoice",
-      "case_sensitive": false
+      "patterns": [
+        {
+          "before_text": "Company:",
+          "after_text": "Invoice",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "From:",
+          "after_text": "123",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "INVOICE Company:",
+          "after_text": "Invoice Number:",
+          "case_sensitive": false
+        }
+      ]
     },
     {
       "name": "Date",
       "description": "Extract date from documents",
-      "before_text": "Date:",
-      "after_text": "Customer Name:",
-      "case_sensitive": false
+      "patterns": [
+        {
+          "before_text": "Date:",
+          "after_text": "Due Date:",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Invoice Date:",
+          "after_text": "Due Date:",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Issued:",
+          "after_text": "Customer",
+          "case_sensitive": false
+        }
+      ]
     },
     {
       "name": "Contract_ID",
       "description": "Extract contract ID from contracts",
-      "before_text": "Contract ID:",
-      "after_text": "Party",
-      "case_sensitive": false
+      "patterns": [
+        {
+          "before_text": "Contract ID:",
+          "after_text": "Party",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Contract Number:",
+          "after_text": "Party",
+          "case_sensitive": false
+        },
+        {
+          "before_text": "Agreement #:",
+          "after_text": "Between",
+          "case_sensitive": false
+        }
+      ]
     },
     {
       "name": "Purchase_Order_Number",
       "description": "Extract PO number from purchase orders",
-      "before_text": "PO Number:",
-      "after_text": "Vendor",
-      "case_sensitive": false
+      "patterns": [
+        {
+          "before_text": "PO Number:",
+          "after_text": "Vendor",
+          "case_sensitive": false
+        }
+      ]
     }
   ],
   "settings": {

@@ -83,6 +83,62 @@ The configuration file defines what values to extract from your text files:
 - **`after_text`**: Text that appears after the value (optional)
 - **`case_sensitive`**: Whether the search should be case-sensitive
 
+### OR Statement Functionality
+
+The extractor now supports **OR statements** for more flexible pattern matching. Instead of a single pattern, you can define multiple alternative patterns for each extraction rule.
+
+#### Single Pattern (Legacy Format):
+```json
+{
+  "name": "Invoice_Number",
+  "description": "Extract invoice number",
+  "before_text": "Invoice Number:",
+  "after_text": "Date:",
+  "case_sensitive": false
+}
+```
+
+#### Multiple Patterns (OR Statement Format):
+```json
+{
+  "name": "Invoice_Number",
+  "description": "Extract invoice number with multiple pattern options",
+  "patterns": [
+    {
+      "before_text": "Invoice Number:",
+      "after_text": "Date:",
+      "case_sensitive": false
+    },
+    {
+      "before_text": "Invoice #:",
+      "after_text": "Date:",
+      "case_sensitive": false
+    },
+    {
+      "before_text": "INV-",
+      "after_text": " ",
+      "case_sensitive": false
+    }
+  ]
+}
+```
+
+#### How OR Statements Work:
+
+1. **Sequential Pattern Testing**: The extractor tries each pattern in order
+2. **First Match Wins**: Returns the value from the first successful pattern
+3. **Fallback Support**: If Pattern 1 fails, try Pattern 2, then Pattern 3, etc.
+4. **Backward Compatibility**: Single pattern configurations still work perfectly
+
+#### Example Use Cases:
+
+- **Invoice Numbers**: Try "Invoice Number:", then "Invoice #:", then "INV-"
+- **Total Amounts**: Try "Total Amount:", then "Total:", then "Amount Due:"
+- **Company Names**: Try "Company:", then "From:", then "Bill To:"
+- **Dates**: Try "Date:", then "Invoice Date:", then "Issued:"
+
+This flexibility ensures higher extraction success rates across different document formats!
+
 #### Settings:
 
 - **`max_extraction_length`**: Maximum characters to extract
