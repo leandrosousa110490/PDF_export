@@ -145,53 +145,86 @@ class EnhancedTextExtractor:
         
         return extracted.strip()
     
-    def extract_value_between_text(self, text: str, before_text: str, after_text: str, 
-                                 case_sensitive: bool = False, 
-                                 max_length: int = None) -> Tuple[Optional[str], float]:
-        """Enhanced extraction with exact matching and validation."""
+    def find_all_matches_between_text(self, text: str, before_text: str, after_text: str, 
+                                    case_sensitive: bool = False, 
+                                    max_length: int = None) -> List[str]:
+        """Find all matches for a pattern in the text."""
         if not text or not before_text:
-            return None, 0.0
+            return []
         
-        # Normalize text
-        normalized_text = self.normalize_whitespace(text)
-        search_text = normalized_text if case_sensitive else normalized_text.lower()
+        # Don't normalize text for pattern matching - work with original text
+        search_text = text if case_sensitive else text.lower()
         before_pattern = before_text if case_sensitive else before_text.lower()
         after_pattern = after_text if case_sensitive else after_text.lower() if after_text else ""
-        
-        # Find start position with exact matching
-        start_pos = search_text.find(before_pattern)
-        if start_pos == -1:
-            return None, 0.0
-        
-        start_pos += len(before_pattern)
         
         # Determine max extraction length
         if max_length is None:
             max_length = self.settings.get('max_extraction_length', 100)
         
-        # Find end position
-        if not after_text:
-            extracted = self.smart_boundary_detection(normalized_text, start_pos, max_length)
-        else:
-            # Find end position with exact matching - BOTH before AND after must match
-            end_pos = search_text[start_pos:].find(after_pattern)
-            if end_pos == -1:
-                # If after_text is specified but not found, return None (no extraction)
-                return None, 0.0
+        matches = []
+        start_search_pos = 0
+        
+        while True:
+            # Find start position with exact matching
+            start_pos = search_text[start_search_pos:].find(before_pattern)
+            if start_pos == -1:
+                break
+            
+            start_pos += start_search_pos + len(before_pattern)
+            
+            # Find end position
+            if not after_text:
+                extracted = self.smart_boundary_detection(text, start_pos, max_length)
             else:
-                end_pos += start_pos
-                extracted = normalized_text[start_pos:end_pos].strip()
+                # Find end position with exact matching
+                end_pos = search_text[start_pos:].find(after_pattern)
+                if end_pos == -1:
+                    # If after_text is specified but not found, skip this match
+                    start_search_pos = start_pos
+                    continue
+                else:
+                    end_pos += start_pos
+                    extracted = text[start_pos:end_pos].strip()
+            
+            # Apply length limit
+            if len(extracted) > max_length:
+                extracted = self.smart_boundary_detection(extracted, 0, max_length)
+            
+            # Clean up the extracted text
+            if self.settings.get('trim_whitespace', True):
+                extracted = extracted.strip()
+            
+            if self.settings.get('remove_special_chars', False):
+                extracted = re.sub(r'[^\w\s.-]', '', extracted)
+            
+            if extracted:
+                matches.append(extracted)
+            
+            # Move search position forward to find next match
+            start_search_pos = start_pos + 1
         
-        # Apply length limit
-        if len(extracted) > max_length:
-            extracted = self.smart_boundary_detection(extracted, 0, max_length)
+        return matches
+
+    def extract_value_between_text(self, text: str, before_text: str, after_text: str, 
+                                 case_sensitive: bool = False, 
+                                 max_length: int = None, 
+                                 match_index: int = 0) -> Tuple[Optional[str], float]:
+        """Enhanced extraction with exact matching, validation, and multiple match selection."""
+        if not text or not before_text:
+            return None, 0.0
         
-        # Clean up the extracted text
-        if self.settings.get('trim_whitespace', True):
-            extracted = extracted.strip()
+        # Find all matches
+        all_matches = self.find_all_matches_between_text(text, before_text, after_text, case_sensitive, max_length)
         
-        if self.settings.get('remove_special_chars', False):
-            extracted = re.sub(r'[^\w\s.-]', '', extracted)
+        if not all_matches:
+            return None, 0.0
+        
+        # Select the specified match index
+        if match_index < 0 or match_index >= len(all_matches):
+            # If match_index is out of range, return None
+            return None, 0.0
+        
+        extracted = all_matches[match_index]
         
         # Return 100% confidence for successful extraction, 0% for failure
         return extracted if extracted else None, 1.0 if extracted else 0.0
@@ -224,10 +257,11 @@ class EnhancedTextExtractor:
                     after_text = pattern.get('after_text', '')
                     case_sensitive = pattern.get('case_sensitive', False)
                     pattern_max_length = pattern.get('max_length', field_max_length)
+                    match_index = pattern.get('match_index', 0)  # Default to first match (index 0)
                     
                     value, conf = self.extract_value_between_text(
                         text_content, before_text, after_text, case_sensitive,
-                        pattern_max_length
+                        pattern_max_length, match_index
                     )
                     
                     # If extraction succeeded, use this result and stop trying other patterns

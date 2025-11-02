@@ -16,6 +16,13 @@ regex>=2023.0.0
 # Configuration and utilities
 pathlib2>=2.3.0
 
+# Image processing for redacted content handling
+Pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
 # Security Note: OCR functionality has been removed to eliminate external model downloads
 # and ensure complete data privacy. The system now relies on built-in PDF text extraction
 # methods (PyPDF2, pdfplumber, PyMuPDF) which provide excellent results for most documents.
+# Image processing libraries are used only for detecting and removing text from image-based
+# redacted content without any external model dependencies.

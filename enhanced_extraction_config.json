@@ -14,13 +14,15 @@
           "before_text": "ABC Corporation",
           "after_text": "Business Street Business",
           "case_sensitive": false,
-          "max_length": 30
+          "max_length": 30,
+          "match_index": 0
         },
         {
           "before_text": "Invoice #:",
           "after_text": "\n",
           "case_sensitive": false,
-          "max_length": 30
+          "max_length": 30,
+          "match_index": 0
         }
       ]
     },
@@ -32,13 +34,15 @@
           "before_text": "Total:",
           "after_text": "\n",
           "case_sensitive": false,
-          "max_length": 20
+          "max_length": 20,
+          "match_index": 0
         },
         {
           "before_text": "Amount Due:",
           "after_text": "\n",
           "case_sensitive": false,
-          "max_length": 20
+          "max_length": 20,
+          "match_index": 0
         }
       ]
     },
@@ -50,31 +54,61 @@
           "before_text": "Company:",
           "after_text": "Invoice",
           "case_sensitive": false,
-          "max_length": 60
+          "max_length": 60,
+          "match_index": 0
         },
         {
           "before_text": "Bill To:",
           "after_text": "\n",
           "case_sensitive": false,
-          "max_length": 60
+          "max_length": 60,
+          "match_index": 0
         }
       ]
     },
     {
       "name": "Date",
-      "max_length": 25,
       "patterns": [
         {
           "before_text": "Date:",
           "after_text": "\n",
           "case_sensitive": false,
-          "max_length": 20
+          "max_length": 20,
+          "match_index": 0
         },
         {
           "before_text": "Invoice Date:",
           "after_text": "\n",
           "case_sensitive": false,
-          "max_length": 20
+          "max_length": 20,
+          "match_index": 0
+        }
+      ]
+    },
+    {
+      "name": "Second_Total_Amount",
+      "max_length": 30,
+      "patterns": [
+        {
+          "before_text": "Total:",
+          "after_text": "\n",
+          "case_sensitive": false,
+          "max_length": 20,
+          "match_index": 1,
+          "comment": "This will extract the SECOND occurrence of 'Total:' instead of the first"
+        }
+      ]
+    },
+    {
+      "name": "Third_Date",
+      "patterns": [
+        {
+          "before_text": "Date:",
+          "after_text": "\n",
+          "case_sensitive": false,
+          "max_length": 20,
+          "match_index": 2,
+          "comment": "This will extract the THIRD occurrence of 'Date:' instead of the first"
         }
       ]
     }

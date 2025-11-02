@@ -8,17 +8,19 @@ pages and image-based PDFs. Saves extracted text to separate text files.
 
 Features:
 - Multiple extraction libraries (PyPDF2, pdfplumber, PyMuPDF)
-- OCR support for image-based content
+- Image processing for redacted content detection and removal
 - Enhanced text recovery from redacted pages
 - Fallback methods for difficult PDFs
 - Multi-page PDF support
+- Security-focused: No external model downloads
 
 Requirements:
 - PyPDF2 or pypdf
 - pdfplumber
 - PyMuPDF (fitz)
-- pytesseract (for OCR)
 - Pillow (PIL)
+- OpenCV (cv2)
+- NumPy
 
 Author: AI Assistant
 Date: 2024
@@ -26,9 +28,22 @@ Date: 2024
 
 import os
 import sys
+import io
 from pathlib import Path
 import warnings
 warnings.filterwarnings("ignore")
+
+# Image processing imports for redacted content handling
+try:
+    import cv2
+    import numpy as np
+    from PIL import Image, ImageDraw
+    IMAGE_PROCESSING_AVAILABLE = True
+    print("✅ Image processing libraries loaded successfully")
+except ImportError as e:
+    IMAGE_PROCESSING_AVAILABLE = False
+    print(f"⚠️  Image processing libraries not available: {e}")
+    print("   Install with: pip install opencv-python pillow numpy")
 
 # =============================================================================
 # CONFIGURATION VARIABLES - MODIFY THESE PATHS AS NEEDED
@@ -82,7 +97,128 @@ def print_library_status():
     for lib, available in libraries_available.items():
         status = "✅ Available" if available else "❌ Not installed"
         print(f"   {lib}: {status}")
+    
+    if IMAGE_PROCESSING_AVAILABLE:
+        print("   🖼️  Image processing: ✅ Available")
+    else:
+        print("   🖼️  Image processing: ❌ Not available")
     print()
+
+
+def detect_redacted_areas(image_array):
+    """
+    Detect redacted (blacked out) areas in an image using computer vision.
+    Returns coordinates of detected redacted regions.
+    """
+    if not IMAGE_PROCESSING_AVAILABLE:
+        return []
+    
+    try:
+        # Convert to grayscale
+        gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+        
+        # Detect very dark areas (potential redactions)
+        # Threshold for very dark pixels (close to black)
+        _, binary = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY_INV)
+        
+        # Find contours of dark areas
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        redacted_areas = []
+        for contour in contours:
+            # Get bounding rectangle
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Filter out very small areas (noise) and very large areas (background)
+            area = w * h
+            if 100 < area < (image_array.shape[0] * image_array.shape[1] * 0.8):
+                redacted_areas.append((x, y, w, h))
+        
+        return redacted_areas
+    
+    except Exception as e:
+        print(f"   ⚠️  Error detecting redacted areas: {e}")
+        return []
+
+
+def remove_redacted_content_from_image(image_array):
+    """
+    Remove or mask redacted content from an image to prevent any text extraction
+    from potentially sensitive areas.
+    """
+    if not IMAGE_PROCESSING_AVAILABLE:
+        return image_array
+    
+    try:
+        # Detect redacted areas
+        redacted_areas = detect_redacted_areas(image_array)
+        
+        if redacted_areas:
+            print(f"   🔒 Detected {len(redacted_areas)} redacted areas - masking for security")
+            
+            # Create a copy of the image
+            cleaned_image = image_array.copy()
+            
+            # Mask redacted areas with white (to prevent any text extraction)
+            for x, y, w, h in redacted_areas:
+                # Expand the masked area slightly to ensure complete coverage
+                padding = 5
+                x_start = max(0, x - padding)
+                y_start = max(0, y - padding)
+                x_end = min(cleaned_image.shape[1], x + w + padding)
+                y_end = min(cleaned_image.shape[0], y + h + padding)
+                
+                # Fill with white
+                cleaned_image[y_start:y_end, x_start:x_end] = [255, 255, 255]
+            
+            return cleaned_image
+        
+        return image_array
+    
+    except Exception as e:
+        print(f"   ⚠️  Error removing redacted content: {e}")
+        return image_array
+
+
+def is_image_based_pdf_page(page_dict):
+    """
+    Determine if a PDF page is primarily image-based (scanned document).
+    Returns True if the page appears to be image-based.
+    """
+    if not isinstance(page_dict, dict):
+        return False
+    
+    # Check if page has images but very little text
+    images = page_dict.get('images', [])
+    blocks = page_dict.get('blocks', [])
+    
+    # Count text blocks vs image blocks
+    text_blocks = 0
+    image_blocks = 0
+    
+    for block in blocks:
+        if block.get('type') == 0:  # Text block
+            text_blocks += 1
+        elif block.get('type') == 1:  # Image block
+            image_blocks += 1
+    
+    # If there are images and very few text blocks, likely image-based
+    if images and image_blocks > 0 and text_blocks < 3:
+        return True
+    
+    # Check text density - if very low text content, might be image-based
+    total_text = ""
+    for block in blocks:
+        if block.get('type') == 0:  # Text block
+            for line in block.get('lines', []):
+                for span in line.get('spans', []):
+                    total_text += span.get('text', '')
+    
+    # If very little extractable text, likely image-based
+    if len(total_text.strip()) < 50:
+        return True
+    
+    return False
 
 
 def extract_with_pypdf(pdf_path):
@@ -120,10 +256,10 @@ def extract_with_pypdf(pdf_path):
                 
                 # Method 2: Try different extraction modes if available
                 try:
-                    # Some versions of PyPDF2 have additional extraction methods
-                    if hasattr(page, 'extractText'):
-                        alt_text = page.extractText()
-                        if alt_text and alt_text.strip():
+                    # Use the modern extract_text method (extractText is deprecated in PyPDF2 3.0.0+)
+                    if hasattr(page, 'extract_text'):
+                        alt_text = page.extract_text()
+                        if alt_text and alt_text.strip() and alt_text not in page_text_parts:
                             page_text_parts.append(alt_text)
                 except Exception as e:
                     print(f"   PyPDF2 alternative extraction failed on page {page_num + 1}: {str(e)}")
@@ -440,6 +576,49 @@ def extract_with_fitz(pdf_path):
                                         page_text_parts.append(clean_match)
             except Exception as e:
                 print(f"   Metadata extraction failed on page {page_num + 1}: {str(e)}")
+            
+            # Method 6: Image processing for redacted content (when available)
+            # Handle cases where PDF pages are primarily images with redacted content
+            try:
+                if cv2 is not None and Image is not None:
+                    # Check if this page is primarily image-based
+                    page_dict = page.get_text("dict")
+                    if is_image_based_pdf_page(page_dict):
+                        print(f"   Detected image-based content on page {page_num + 1}, processing for redacted areas...")
+                        
+                        # Convert page to image
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better quality
+                        img_data = pix.tobytes("png")
+                        
+                        # Convert to PIL Image
+                        pil_image = Image.open(io.BytesIO(img_data))
+                        
+                        # Convert PIL to OpenCV format
+                        cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+                        
+                        # Detect and remove redacted areas
+                        processed_image = remove_redacted_content_from_image(cv_image)
+                        
+                        if processed_image is not None:
+                            # Convert back to PIL for potential future OCR (if needed)
+                            processed_pil = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
+                            
+                            # For now, we'll note that redacted content was detected and processed
+                            # The actual text extraction would require OCR, which is removed for privacy
+                            redacted_info = "Note: Image-based content detected with redacted areas. Redacted content has been processed but text extraction from images requires OCR functionality."
+                            page_text_parts.append(redacted_info)
+                            print(f"   Processed redacted areas on image-based page {page_num + 1}")
+                        else:
+                            print(f"   No redacted areas detected on image-based page {page_num + 1}")
+                else:
+                    # Image processing libraries not available
+                    if not page_text_parts or len(" ".join(page_text_parts).strip()) < 50:
+                        # Likely an image-based page but can't process without image libraries
+                        warning_text = "Note: This page appears to be image-based. Image processing libraries are required for redacted content handling."
+                        page_text_parts.append(warning_text)
+                        print(f"   Image-based content detected on page {page_num + 1} but image processing unavailable")
+            except Exception as e:
+                print(f"   Image processing failed on page {page_num + 1}: {str(e)}")
             
             # Combine all text from this page
             if page_text_parts:
