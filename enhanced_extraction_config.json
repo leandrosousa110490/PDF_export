@@ -3,14 +3,12 @@
     "max_extraction_length": 100,
     "trim_whitespace": true,
     "remove_special_chars": false,
-    "default_value_if_not_found": "NOT_FOUND",
-    "fuzzy_matching_threshold": 0.8
+    "default_value_if_not_found": "NOT_FOUND"
   },
   "configurations": [
     {
       "name": "Invoice_Number",
       "max_length": 3,
-      "fuzzy_threshold": 0.8,
       "patterns": [
         {
           "before_text": "ABC Corporation",
@@ -23,17 +21,12 @@
           "after_text": "\n",
           "case_sensitive": false,
           "max_length": 30
-        },
-        {
-          "regex_pattern": "(?:Invoice|INV)[-#:\\s]*([A-Z0-9-]+)",
-          "max_length": 30
         }
       ]
     },
     {
       "name": "Total_Amount",
       "max_length": 30,
-      "fuzzy_threshold": 0.7,
       "patterns": [
         {
           "before_text": "Total:",
@@ -46,17 +39,12 @@
           "after_text": "\n",
           "case_sensitive": false,
           "max_length": 20
-        },
-        {
-          "regex_pattern": "(?:Total|Amount Due|Grand Total)[:$\\s]*(\\$?[\\d,]+\\.?\\d*)",
-          "max_length": 20
         }
       ]
     },
     {
       "name": "Company_Name",
       "max_length": 80,
-      "fuzzy_threshold": 0.8,
       "patterns": [
         {
           "before_text": "Company:",
@@ -69,17 +57,12 @@
           "after_text": "\n",
           "case_sensitive": false,
           "max_length": 60
-        },
-        {
-          "regex_pattern": "Company:\\s*([A-Za-z\\s&.,'-]+?)(?:\\s*Invoice|\\s*$)",
-          "max_length": 60
         }
       ]
     },
     {
       "name": "Date",
       "max_length": 25,
-      "fuzzy_threshold": 0.8,
       "patterns": [
         {
           "before_text": "Date:",
@@ -92,10 +75,6 @@
           "after_text": "\n",
           "case_sensitive": false,
           "max_length": 20
-        },
-        {
-          "regex_pattern": "(?:Date|Invoice Date)[:]\\s*(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})",
-          "max_length": 15
         }
       ]
     }

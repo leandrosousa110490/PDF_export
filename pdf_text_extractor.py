@@ -97,11 +97,15 @@ def print_library_status():
 
 
 def extract_with_pypdf(pdf_path):
-    """Extract text using PyPDF2/pypdf."""
+    """Enhanced text extraction using PyPDF2/pypdf - fallback method with multiple strategies."""
     if not PyPDF2:
         return None
     
     try:
+        all_text = ""
+        pages_processed = 0
+        pages_with_text = 0
+        
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             
@@ -112,14 +116,95 @@ def extract_with_pypdf(pdf_path):
                 except:
                     return None
             
-            all_text = ""
             for page_num in range(len(pdf_reader.pages)):
                 page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
-                if page_text:
-                    all_text += page_text + " "
-            
-            return all_text.strip() if all_text.strip() else None
+                page_text_parts = []
+                pages_processed += 1
+                
+                # Method 1: Standard text extraction
+                try:
+                    page_text = page.extract_text()
+                    if page_text and page_text.strip():
+                        page_text_parts.append(page_text)
+                except Exception as e:
+                    print(f"   PyPDF2 standard extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 2: Try different extraction modes if available
+                try:
+                    # Some versions of PyPDF2 have additional extraction methods
+                    if hasattr(page, 'extractText'):
+                        alt_text = page.extractText()
+                        if alt_text and alt_text.strip():
+                            page_text_parts.append(alt_text)
+                except Exception as e:
+                    print(f"   PyPDF2 alternative extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 3: Extract from annotations if present
+                try:
+                    if hasattr(page, 'annotations') and page.annotations:
+                        for annotation in page.annotations:
+                            if annotation and hasattr(annotation, 'get_object'):
+                                ann_obj = annotation.get_object()
+                                if ann_obj and '/Contents' in ann_obj:
+                                    ann_text = str(ann_obj['/Contents'])
+                                    if ann_text and ann_text.strip():
+                                        page_text_parts.append(ann_text)
+                except Exception as e:
+                    print(f"   PyPDF2 annotation extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 4: Try to extract from form fields
+                try:
+                    if hasattr(pdf_reader, 'get_form_text_fields'):
+                        form_fields = pdf_reader.get_form_text_fields()
+                        if form_fields:
+                            for field_name, field_value in form_fields.items():
+                                if field_value and str(field_value).strip():
+                                    page_text_parts.append(f"{field_name}: {field_value}")
+                except Exception as e:
+                    print(f"   PyPDF2 form field extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 5: Extract from page objects directly
+                try:
+                    if hasattr(page, 'get_contents') and page.get_contents():
+                        contents = page.get_contents()
+                        if contents and hasattr(contents, 'get_data'):
+                            content_data = contents.get_data()
+                            if content_data:
+                                # Try to decode content stream (basic approach)
+                                try:
+                                    decoded_content = content_data.decode('utf-8', errors='ignore')
+                                    # Extract text-like content (very basic)
+                                    import re
+                                    text_matches = re.findall(r'\((.*?)\)', decoded_content)
+                                    if text_matches:
+                                        extracted_text = " ".join(text_matches)
+                                        if extracted_text.strip():
+                                            page_text_parts.append(extracted_text)
+                                except Exception as decode_e:
+                                    print(f"   PyPDF2 content decoding failed on page {page_num + 1}: {str(decode_e)}")
+                except Exception as e:
+                    print(f"   PyPDF2 content extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Combine all text from this page
+                if page_text_parts:
+                    # Remove duplicates while preserving order
+                    unique_parts = []
+                    seen_content = set()
+                    for part in page_text_parts:
+                        part_normalized = part.strip().lower()
+                        if part_normalized and part_normalized not in seen_content:
+                            unique_parts.append(part)
+                            seen_content.add(part_normalized)
+                    
+                    if unique_parts:
+                        page_final_text = " ".join(unique_parts)
+                        all_text += page_final_text + " "
+                        pages_with_text += 1
+                else:
+                    print(f"   Warning: No text extracted from page {page_num + 1}")
+        
+        print(f"   PyPDF2: Processed {pages_processed} pages, {pages_with_text} pages had extractable text")
+        return all_text.strip() if all_text.strip() else None
             
     except Exception as e:
         print(f"   PyPDF2 extraction failed: {str(e)}")
@@ -127,30 +212,102 @@ def extract_with_pypdf(pdf_path):
 
 
 def extract_with_pdfplumber(pdf_path):
-    """Extract text using pdfplumber - better for complex layouts."""
+    """Enhanced text extraction using pdfplumber - better for complex layouts and redacted content."""
     if not pdfplumber:
         return None
     
     try:
         all_text = ""
+        pages_processed = 0
+        pages_with_text = 0
+        
         with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                # Extract text
-                page_text = page.extract_text()
-                if page_text:
-                    all_text += page_text + " "
+            for page_num, page in enumerate(pdf.pages):
+                page_text_parts = []
+                pages_processed += 1
                 
-                # Also try to extract text from tables
+                # Method 1: Standard text extraction
+                try:
+                    page_text = page.extract_text()
+                    if page_text and page_text.strip():
+                        page_text_parts.append(page_text)
+                except Exception as e:
+                    print(f"   pdfplumber standard extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 2: Extract text with different strategies
+                try:
+                    # Try extracting with different layout parameters
+                    for strategy in [{"layout": True}, {"layout": False}, {"x_tolerance": 1, "y_tolerance": 1}]:
+                        try:
+                            strategy_text = page.extract_text(**strategy)
+                            if strategy_text and strategy_text.strip():
+                                # Check if this gives us new content
+                                existing_text = " ".join(page_text_parts)
+                                if len(strategy_text) > len(existing_text) * 1.1:  # 10% more content
+                                    page_text_parts.append(strategy_text)
+                                    break
+                        except Exception as e:
+                            print(f"   pdfplumber strategy extraction failed on page {page_num + 1}: {str(e)}")
+                            continue
+                except Exception as e:
+                    print(f"   pdfplumber advanced extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 3: Extract text from tables
                 try:
                     tables = page.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            if row:
-                                table_text = " ".join([cell for cell in row if cell])
-                                all_text += table_text + " "
-                except:
-                    pass
+                    for table_num, table in enumerate(tables):
+                        try:
+                            if table:
+                                for row_num, row in enumerate(table):
+                                    if row:
+                                        table_text = " ".join([str(cell) for cell in row if cell])
+                                        if table_text.strip():
+                                            page_text_parts.append(table_text)
+                        except Exception as e:
+                            print(f"   Table extraction failed on page {page_num + 1}, table {table_num}: {str(e)}")
+                            continue
+                except Exception as e:
+                    print(f"   Table extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 4: Extract text from individual characters (for heavily redacted content)
+                try:
+                    chars = page.chars
+                    if chars:
+                        char_text = "".join([char.get('text', '') for char in chars])
+                        if char_text and char_text.strip():
+                            page_text_parts.append(char_text)
+                except Exception as e:
+                    print(f"   Character extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Method 5: Extract text from words (alternative approach)
+                try:
+                    words = page.extract_words()
+                    if words:
+                        word_text = " ".join([word.get('text', '') for word in words])
+                        if word_text and word_text.strip():
+                            page_text_parts.append(word_text)
+                except Exception as e:
+                    print(f"   Word extraction failed on page {page_num + 1}: {str(e)}")
+                
+                # Combine all text from this page
+                if page_text_parts:
+                    # Remove duplicates while preserving order
+                    unique_parts = []
+                    seen_content = set()
+                    for part in page_text_parts:
+                        part_normalized = part.strip().lower()
+                        if part_normalized and part_normalized not in seen_content:
+                            unique_parts.append(part)
+                            seen_content.add(part_normalized)
+                    
+                    if unique_parts:
+                        page_final_text = " ".join(unique_parts)
+                        all_text += page_final_text + " "
+                        pages_with_text += 1
+                else:
+                    print(f"   Warning: No text extracted from page {page_num + 1}")
         
+        print(f"   pdfplumber: Processed {pages_processed} pages, {pages_with_text} pages had extractable text")
         return all_text.strip() if all_text.strip() else None
         
     except Exception as e:
@@ -159,58 +316,140 @@ def extract_with_pdfplumber(pdf_path):
 
 
 def extract_with_fitz(pdf_path):
-    """Extract text using PyMuPDF (fitz) - good for redacted content."""
+    """Enhanced text extraction using PyMuPDF (fitz) - robust handling of redacted content."""
     if not fitz:
         return None
     
     try:
         doc = fitz.open(pdf_path)
         all_text = ""
+        pages_processed = 0
+        pages_with_text = 0
         
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
+            page_text_parts = []
+            pages_processed += 1
             
-            # Extract text
-            page_text = page.get_text()
-            if page_text:
-                all_text += page_text + " "
+            # Method 1: Standard text extraction
+            try:
+                standard_text = page.get_text()
+                if standard_text and standard_text.strip():
+                    page_text_parts.append(standard_text)
+            except Exception as e:
+                print(f"   Standard text extraction failed on page {page_num + 1}: {str(e)}")
             
-            # Try to extract text from annotations and forms
+            # Method 2: Extract text with different flags for better redaction handling
+            try:
+                # Try different text extraction modes
+                for flag in ["text", "dict", "rawdict"]:
+                    try:
+                        if flag == "text":
+                            continue  # Already tried above
+                        elif flag == "dict":
+                            text_dict = page.get_text("dict")
+                            dict_text = ""
+                            for block in text_dict.get("blocks", []):
+                                if "lines" in block:
+                                    for line in block["lines"]:
+                                        for span in line.get("spans", []):
+                                            dict_text += span.get("text", "") + " "
+                            if dict_text.strip():
+                                page_text_parts.append(dict_text)
+                        elif flag == "rawdict":
+                            raw_dict = page.get_text("rawdict")
+                            raw_text = ""
+                            for block in raw_dict.get("blocks", []):
+                                if "lines" in block:
+                                    for line in block["lines"]:
+                                        for span in line.get("spans", []):
+                                            raw_text += span.get("text", "") + " "
+                            if raw_text.strip():
+                                page_text_parts.append(raw_text)
+                    except Exception as e:
+                        print(f"   Text extraction mode '{flag}' failed on page {page_num + 1}: {str(e)}")
+                        continue
+            except Exception as e:
+                print(f"   Advanced text extraction failed on page {page_num + 1}: {str(e)}")
+            
+            # Method 3: Extract text from annotations and forms
             try:
                 # Get text from annotations
                 for annot in page.annots():
-                    if annot.content:
-                        all_text += annot.content + " "
+                    try:
+                        if annot.content:
+                            page_text_parts.append(annot.content)
+                    except Exception as e:
+                        print(f"   Annotation extraction failed on page {page_num + 1}: {str(e)}")
+                        continue
                 
                 # Get text from form fields
                 widgets = page.widgets()
                 for widget in widgets:
-                    if widget.field_value:
-                        all_text += str(widget.field_value) + " "
-            except:
-                pass
+                    try:
+                        if widget.field_value:
+                            page_text_parts.append(str(widget.field_value))
+                    except Exception as e:
+                        print(f"   Form field extraction failed on page {page_num + 1}: {str(e)}")
+                        continue
+            except Exception as e:
+                print(f"   Annotation/form extraction failed on page {page_num + 1}: {str(e)}")
             
-            # Try OCR on images if tesseract is available
+            # Method 4: OCR on entire page if text extraction yields little content
+            page_combined_text = " ".join(page_text_parts).strip()
+            if pytesseract and Image and len(page_combined_text) < 50:  # If very little text found
+                try:
+                    # Render page as image and OCR it
+                    mat = fitz.Matrix(2.0, 2.0)  # Higher resolution for better OCR
+                    pix = page.get_pixmap(matrix=mat)
+                    img_data = pix.tobytes("png")
+                    img_pil = Image.open(io.BytesIO(img_data))
+                    
+                    # OCR the entire page
+                    ocr_text = pytesseract.image_to_string(img_pil, config='--psm 6')
+                    if ocr_text.strip():
+                        page_text_parts.append(ocr_text)
+                        print(f"   OCR recovered text on page {page_num + 1}")
+                    
+                    pix = None
+                except Exception as e:
+                    print(f"   Page OCR failed on page {page_num + 1}: {str(e)}")
+            
+            # Method 5: Extract text from embedded images
             if pytesseract and Image:
                 try:
                     # Get images from page
                     image_list = page.get_images()
                     for img_index, img in enumerate(image_list):
-                        # Extract image
-                        xref = img[0]
-                        pix = fitz.Pixmap(doc, xref)
-                        if pix.n - pix.alpha < 4:  # GRAY or RGB
-                            img_data = pix.tobytes("png")
-                            img_pil = Image.open(io.BytesIO(img_data))
-                            # OCR the image
-                            ocr_text = pytesseract.image_to_string(img_pil)
-                            if ocr_text.strip():
-                                all_text += ocr_text + " "
-                        pix = None
-                except:
-                    pass
+                        try:
+                            # Extract image
+                            xref = img[0]
+                            pix = fitz.Pixmap(doc, xref)
+                            if pix.n - pix.alpha < 4:  # GRAY or RGB
+                                img_data = pix.tobytes("png")
+                                img_pil = Image.open(io.BytesIO(img_data))
+                                # OCR the image
+                                ocr_text = pytesseract.image_to_string(img_pil, config='--psm 6')
+                                if ocr_text.strip():
+                                    page_text_parts.append(ocr_text)
+                            pix = None
+                        except Exception as e:
+                            print(f"   Image OCR failed on page {page_num + 1}, image {img_index}: {str(e)}")
+                            continue
+                except Exception as e:
+                    print(f"   Image extraction failed on page {page_num + 1}: {str(e)}")
+            
+            # Combine all text from this page
+            if page_text_parts:
+                page_final_text = " ".join(page_text_parts)
+                all_text += page_final_text + " "
+                pages_with_text += 1
+            else:
+                print(f"   Warning: No text extracted from page {page_num + 1}")
         
         doc.close()
+        
+        print(f"   PyMuPDF: Processed {pages_processed} pages, {pages_with_text} pages had extractable text")
         return all_text.strip() if all_text.strip() else None
         
     except Exception as e:
@@ -385,14 +624,12 @@ def main():
         print("   pip install pdfplumber")
         print("   pip install PyMuPDF")
         print("   pip install pytesseract pillow  # For OCR support")
-        input("\nPress Enter to exit...")
         return
     
     # Validate PDF folder exists
     if not os.path.exists(pdf_folder):
         print(f"❌ Error: PDF folder does not exist: {pdf_folder}")
         print("Please update the PDF_FOLDER_PATH variable in the script.")
-        input("\nPress Enter to exit...")
         return
     
     # Create output folder if specified and doesn't exist
@@ -402,13 +639,10 @@ def main():
             print(f"✅ Created output folder: {output_folder}")
         except Exception as e:
             print(f"❌ Error creating output folder: {str(e)}")
-            input("\nPress Enter to exit...")
             return
     
     # Process PDFs with enhanced extraction
     process_pdfs_in_folder(pdf_folder, output_folder)
-    
-    input("\nPress Enter to exit...")
 
 
 if __name__ == "__main__":

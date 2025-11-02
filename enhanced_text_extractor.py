@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Enhanced Text to Excel Extractor
-Advanced text extraction with fuzzy matching, regex support, and improved accuracy.
+Advanced text extraction with exact matching, regex support, and improved accuracy.
 """
 
 import os
@@ -10,7 +10,6 @@ import re
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
-from difflib import SequenceMatcher
 import logging
 
 # ================================
@@ -21,7 +20,7 @@ import logging
 TEXT_FILES_FOLDER_PATH = r"C:\Users\nbaba\Desktop\PDF to Excel\extracted_texts"
 
 # Path to the configuration JSON file
-CONFIG_FILE_PATH = r"C:\Users\nbaba\Desktop\PDF to Excel\extraction_config.json"
+CONFIG_FILE_PATH = r"C:\Users\nbaba\Desktop\PDF to Excel\enhanced_extraction_config.json"
 
 # Path to the folder where Excel file will be saved
 EXPORT_FOLDER_PATH = r"C:\Users\nbaba\Desktop\PDF to Excel\exports"
@@ -34,7 +33,7 @@ EXCEL_FILE_NAME = "extracted_data_enhanced.xlsx"
 # ================================
 
 class EnhancedTextExtractor:
-    """Enhanced text extraction with fuzzy matching and advanced features."""
+    """Enhanced text extraction with exact matching and advanced features."""
     
     def __init__(self, config_path: str):
         """Initialize with configuration file."""
@@ -58,34 +57,6 @@ class EnhancedTextExtractor:
         except json.JSONDecodeError as e:
             print(f"❌ Error parsing JSON: {e}")
             return {"configurations": [], "settings": {}}
-    
-    def fuzzy_find(self, text: str, pattern: str, threshold: float = 0.8) -> Optional[int]:
-        """Find pattern in text using fuzzy matching."""
-        if not pattern or not text:
-            return None
-        
-        text_lower = text.lower()
-        pattern_lower = pattern.lower()
-        
-        # First try exact match
-        exact_pos = text_lower.find(pattern_lower)
-        if exact_pos != -1:
-            return exact_pos
-        
-        # Try fuzzy matching with sliding window
-        pattern_len = len(pattern_lower)
-        best_ratio = 0
-        best_pos = None
-        
-        for i in range(len(text_lower) - pattern_len + 1):
-            window = text_lower[i:i + pattern_len]
-            ratio = SequenceMatcher(None, pattern_lower, window).ratio()
-            
-            if ratio > best_ratio and ratio >= threshold:
-                best_ratio = ratio
-                best_pos = i
-        
-        return best_pos
     
     def normalize_whitespace(self, text: str) -> str:
         """Normalize whitespace in text."""
@@ -136,27 +107,33 @@ class EnhancedTextExtractor:
         
         return value, confidence
     
-    def extract_with_regex(self, text: str, pattern: str) -> Optional[str]:
-        """Extract using regex pattern."""
-        try:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                # Return the first group if exists, otherwise the whole match
-                return match.group(1) if match.groups() else match.group(0)
-        except re.error as e:
-            self.logger.warning(f"Invalid regex pattern '{pattern}': {e}")
-        return None
+
     
     def smart_boundary_detection(self, text: str, start_pos: int, max_length: int) -> str:
-        """Detect smart boundaries for extraction."""
+        """Detect smart boundaries for extraction with improved boundary detection."""
         if start_pos >= len(text):
             return ""
         
-        end_pos = min(start_pos + max_length, len(text))
-        extracted = text[start_pos:end_pos]
+        # Common delimiters that should stop extraction
+        common_delimiters = ['\n', '\r', '\t', '  ', ' Invoice', ' Date:', ' Customer', ' Company', ' Total', ' Amount']
         
-        # Try to end at word boundary
-        if end_pos < len(text) and not text[end_pos].isspace():
+        # Start with the text from start position
+        remaining_text = text[start_pos:]
+        
+        # Find the earliest delimiter within max_length
+        earliest_delimiter_pos = len(remaining_text)
+        
+        for delimiter in common_delimiters:
+            delimiter_pos = remaining_text.find(delimiter)
+            if delimiter_pos != -1 and delimiter_pos < earliest_delimiter_pos:
+                earliest_delimiter_pos = delimiter_pos
+        
+        # Use the minimum of max_length and delimiter position
+        end_pos = min(max_length, earliest_delimiter_pos)
+        extracted = remaining_text[:end_pos]
+        
+        # Try to end at word boundary if we hit max_length (not a delimiter)
+        if end_pos == max_length and end_pos < len(remaining_text) and not remaining_text[end_pos].isspace():
             # Find the last space within the extracted text
             last_space = extracted.rfind(' ')
             if last_space > len(extracted) * 0.7:  # Only if it's not too early
@@ -170,19 +147,10 @@ class EnhancedTextExtractor:
     
     def extract_value_between_text(self, text: str, before_text: str, after_text: str, 
                                  case_sensitive: bool = False, 
-                                 fuzzy_threshold: float = 0.8,
-                                 max_length: int = None,
-                                 regex_pattern: str = None) -> Tuple[Optional[str], float]:
-        """Enhanced extraction with fuzzy matching and validation."""
+                                 max_length: int = None) -> Tuple[Optional[str], float]:
+        """Enhanced extraction with exact matching and validation."""
         if not text or not before_text:
             return None, 0.0
-        
-        # Use regex pattern if provided
-        if regex_pattern:
-            extracted = self.extract_with_regex(text, regex_pattern)
-            if extracted:
-                confidence = 0.9
-                return self.normalize_whitespace(extracted), confidence
         
         # Normalize text
         normalized_text = self.normalize_whitespace(text)
@@ -190,9 +158,9 @@ class EnhancedTextExtractor:
         before_pattern = before_text if case_sensitive else before_text.lower()
         after_pattern = after_text if case_sensitive else after_text.lower() if after_text else ""
         
-        # Find start position with fuzzy matching
-        start_pos = self.fuzzy_find(search_text, before_pattern, fuzzy_threshold)
-        if start_pos is None:
+        # Find start position with exact matching
+        start_pos = search_text.find(before_pattern)
+        if start_pos == -1:
             return None, 0.0
         
         start_pos += len(before_pattern)
@@ -205,9 +173,9 @@ class EnhancedTextExtractor:
         if not after_text:
             extracted = self.smart_boundary_detection(normalized_text, start_pos, max_length)
         else:
-            # Find end position with fuzzy matching
-            end_pos = self.fuzzy_find(search_text[start_pos:], after_pattern, fuzzy_threshold)
-            if end_pos is None:
+            # Find end position with exact matching
+            end_pos = search_text[start_pos:].find(after_pattern)
+            if end_pos == -1:
                 extracted = self.smart_boundary_detection(normalized_text, start_pos, max_length)
             else:
                 end_pos += start_pos
@@ -224,14 +192,8 @@ class EnhancedTextExtractor:
         if self.settings.get('remove_special_chars', False):
             extracted = re.sub(r'[^\w\s.-]', '', extracted)
         
-        # Calculate confidence based on extraction quality
-        confidence = 0.8  # Base confidence for successful extraction
-        if start_pos == search_text.find(before_pattern):  # Exact match
-            confidence += 0.1
-        if after_text and after_pattern in search_text[start_pos:]:  # Found end pattern
-            confidence += 0.1
-        
-        return extracted if extracted else None, min(confidence, 1.0)
+        # Return 100% confidence for successful extraction, 0% for failure
+        return extracted if extracted else None, 1.0 if extracted else 0.0
     
     def extract_from_text_file(self, file_path: str) -> Dict[str, Any]:
         """Extract all configured values from a single text file with enhanced features."""
@@ -248,43 +210,40 @@ class EnhancedTextExtractor:
         for config in configurations:
             config_name = config.get('name', 'Unknown')
             extracted_value = None
-            best_confidence = 0.0
+            confidence = 0.0
             
             # Get field-specific settings
             field_max_length = config.get('max_length', self.settings.get('max_extraction_length', 100))
-            fuzzy_threshold = config.get('fuzzy_threshold', 0.8)
             
             # Check if config uses patterns structure
             if 'patterns' in config:
-                # Try each pattern until one succeeds or find the best one
+                # Try each pattern sequentially until one succeeds
                 for pattern in config['patterns']:
                     before_text = pattern.get('before_text', '')
                     after_text = pattern.get('after_text', '')
                     case_sensitive = pattern.get('case_sensitive', False)
-                    regex_pattern = pattern.get('regex_pattern')
                     pattern_max_length = pattern.get('max_length', field_max_length)
                     
-                    value, confidence = self.extract_value_between_text(
+                    value, conf = self.extract_value_between_text(
                         text_content, before_text, after_text, case_sensitive,
-                        fuzzy_threshold, pattern_max_length, regex_pattern
+                        pattern_max_length
                     )
                     
-                    if value and confidence > best_confidence:
+                    # If extraction succeeded, use this result and stop trying other patterns
+                    if value and conf > 0:
                         extracted_value = value
-                        best_confidence = confidence
-                        
-                        # If we have high confidence, stop trying other patterns
-                        if confidence >= 0.9:
-                            break
+                        confidence = conf
+                        break  # Stop at first successful extraction
             
             # Validate the extracted value
             if extracted_value:
                 validated_value, validation_confidence = self.validate_extraction(extracted_value, config_name)
-                final_confidence = (best_confidence + validation_confidence) / 2
+                # Use 100% confidence for successful extractions
+                final_confidence = 1.0 if validated_value != 'NOT_FOUND' else 0.0
                 
                 results[config_name] = {
                     'value': validated_value,
-                    'confidence': round(final_confidence, 2)
+                    'confidence': final_confidence
                 }
             else:
                 results[config_name] = {
@@ -442,20 +401,18 @@ class EnhancedTextExtractor:
 # ================================
 
 def create_enhanced_config():
-    """Create an enhanced configuration with fuzzy matching and regex support."""
+    """Create an enhanced configuration with exact text matching only."""
     enhanced_config = {
         "settings": {
             "max_extraction_length": 100,
             "trim_whitespace": True,
             "remove_special_chars": False,
-            "default_value_if_not_found": "NOT_FOUND",
-            "fuzzy_matching_threshold": 0.8
+            "default_value_if_not_found": "NOT_FOUND"
         },
         "configurations": [
             {
                 "name": "Invoice_Number",
                 "max_length": 50,
-                "fuzzy_threshold": 0.8,
                 "patterns": [
                     {
                         "before_text": "Invoice Number:",
@@ -468,17 +425,12 @@ def create_enhanced_config():
                         "after_text": "\n",
                         "case_sensitive": False,
                         "max_length": 30
-                    },
-                    {
-                        "regex_pattern": r"(?:Invoice|INV)[-#:\s]*([A-Z0-9-]+)",
-                        "max_length": 30
                     }
                 ]
             },
             {
                 "name": "Total_Amount",
                 "max_length": 30,
-                "fuzzy_threshold": 0.7,
                 "patterns": [
                     {
                         "before_text": "Total:",
@@ -491,17 +443,12 @@ def create_enhanced_config():
                         "after_text": "\n",
                         "case_sensitive": False,
                         "max_length": 20
-                    },
-                    {
-                        "regex_pattern": r"(?:Total|Amount Due|Grand Total)[:$\s]*(\$?[\d,]+\.?\d*)",
-                        "max_length": 20
                     }
                 ]
             },
             {
                 "name": "Company_Name",
                 "max_length": 80,
-                "fuzzy_threshold": 0.8,
                 "patterns": [
                     {
                         "before_text": "Company:",
@@ -514,17 +461,12 @@ def create_enhanced_config():
                         "after_text": "\n",
                         "case_sensitive": False,
                         "max_length": 60
-                    },
-                    {
-                        "regex_pattern": r"Company:\s*([A-Za-z\s&.,'-]+?)(?:\s*Invoice|\s*$)",
-                        "max_length": 60
                     }
                 ]
             },
             {
                 "name": "Date",
                 "max_length": 25,
-                "fuzzy_threshold": 0.8,
                 "patterns": [
                     {
                         "before_text": "Date:",
@@ -537,10 +479,6 @@ def create_enhanced_config():
                         "after_text": "\n",
                         "case_sensitive": False,
                         "max_length": 20
-                    },
-                    {
-                        "regex_pattern": r"(?:Date|Invoice Date)[:]\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-                        "max_length": 15
                     }
                 ]
             }
