@@ -26,7 +26,6 @@ Date: 2024
 
 import os
 import sys
-import io
 from pathlib import Path
 import warnings
 warnings.filterwarnings("ignore")
@@ -49,7 +48,7 @@ libraries_available = {
     'pypdf': False,
     'pdfplumber': False,
     'fitz': False,
-    'tesseract': False
+    'easyocr': False
 }
 
 # Try PyPDF2/pypdf
@@ -77,14 +76,15 @@ try:
 except ImportError:
     fitz = None
 
-# Try OCR libraries
+# Try EasyOCR library (no Tesseract dependency)
 try:
-    import pytesseract
-    from PIL import Image
-    libraries_available['tesseract'] = True
+    import easyocr
+    libraries_available['easyocr'] = True
+    # Initialize EasyOCR reader for English
+    ocr_reader = easyocr.Reader(['en'], gpu=False)
 except ImportError:
-    pytesseract = None
-    Image = None
+    easyocr = None
+    ocr_reader = None
 
 
 def print_library_status():
@@ -397,26 +397,26 @@ def extract_with_fitz(pdf_path):
             
             # Method 4: OCR on entire page if text extraction yields little content
             page_combined_text = " ".join(page_text_parts).strip()
-            if pytesseract and Image and len(page_combined_text) < 50:  # If very little text found
+            if ocr_reader and len(page_combined_text) < 50:  # If very little text found
                 try:
                     # Render page as image and OCR it
                     mat = fitz.Matrix(2.0, 2.0)  # Higher resolution for better OCR
                     pix = page.get_pixmap(matrix=mat)
                     img_data = pix.tobytes("png")
-                    img_pil = Image.open(io.BytesIO(img_data))
                     
-                    # OCR the entire page
-                    ocr_text = pytesseract.image_to_string(img_pil, config='--psm 6')
+                    # Use EasyOCR to extract text from the image
+                    ocr_results = ocr_reader.readtext(img_data)
+                    ocr_text = " ".join([result[1] for result in ocr_results if result[2] > 0.5])  # confidence > 0.5
                     if ocr_text.strip():
                         page_text_parts.append(ocr_text)
-                        print(f"   OCR recovered text on page {page_num + 1}")
+                        print(f"   EasyOCR recovered text on page {page_num + 1}")
                     
                     pix = None
                 except Exception as e:
                     print(f"   Page OCR failed on page {page_num + 1}: {str(e)}")
             
             # Method 5: Extract text from embedded images
-            if pytesseract and Image:
+            if ocr_reader:
                 try:
                     # Get images from page
                     image_list = page.get_images()
@@ -427,9 +427,10 @@ def extract_with_fitz(pdf_path):
                             pix = fitz.Pixmap(doc, xref)
                             if pix.n - pix.alpha < 4:  # GRAY or RGB
                                 img_data = pix.tobytes("png")
-                                img_pil = Image.open(io.BytesIO(img_data))
-                                # OCR the image
-                                ocr_text = pytesseract.image_to_string(img_pil, config='--psm 6')
+                                
+                                # Use EasyOCR to extract text from the image
+                                ocr_results = ocr_reader.readtext(img_data)
+                                ocr_text = " ".join([result[1] for result in ocr_results if result[2] > 0.5])  # confidence > 0.5
                                 if ocr_text.strip():
                                     page_text_parts.append(ocr_text)
                             pix = None
@@ -623,7 +624,7 @@ def main():
         print("   pip install PyPDF2")
         print("   pip install pdfplumber")
         print("   pip install PyMuPDF")
-        print("   pip install pytesseract pillow  # For OCR support")
+        print("   pip install easyocr  # For OCR support (no Tesseract required)")
         return
     
     # Validate PDF folder exists

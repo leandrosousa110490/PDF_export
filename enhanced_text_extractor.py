@@ -173,10 +173,11 @@ class EnhancedTextExtractor:
         if not after_text:
             extracted = self.smart_boundary_detection(normalized_text, start_pos, max_length)
         else:
-            # Find end position with exact matching
+            # Find end position with exact matching - BOTH before AND after must match
             end_pos = search_text[start_pos:].find(after_pattern)
             if end_pos == -1:
-                extracted = self.smart_boundary_detection(normalized_text, start_pos, max_length)
+                # If after_text is specified but not found, return None (no extraction)
+                return None, 0.0
             else:
                 end_pos += start_pos
                 extracted = normalized_text[start_pos:end_pos].strip()

@@ -6,9 +6,8 @@ PyPDF2>=3.0.0
 pdfplumber>=0.9.0
 PyMuPDF>=1.23.0
 
-# OCR support for image-based content and redacted pages
-pytesseract>=0.3.10
-Pillow>=10.0.0
+# OCR support for image-based content and redacted pages (no Tesseract required)
+easyocr>=1.7.0
 
 # Excel export (existing requirement)
 openpyxl>=3.1.0
@@ -16,7 +15,5 @@ openpyxl>=3.1.0
 # Additional utilities
 pathlib2>=2.3.7; python_version < '3.4'
 
-# Note: For OCR to work, you also need to install Tesseract OCR:
-# Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki
-# macOS: brew install tesseract
-# Linux: sudo apt-get install tesseract-ocr
+# Note: EasyOCR is used for OCR functionality - no additional installation required!
+# EasyOCR automatically downloads required models on first use.
