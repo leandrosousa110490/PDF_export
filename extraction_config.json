@@ -1,0 +1,54 @@
+{
+  "settings": {
+    "text_files_folder": "extracted_text_files",
+    "output_excel_file": "extraction_results/extracted_values.xlsx",
+    "case_sensitive": false
+  },
+  "extraction_rules": [
+    {
+      "name": "Invoice_Number",
+      "description": "Extract invoice number from documents",
+      "target_sentence": "[Page 1] DETAILED INVOICE From: ABC Corporation 123 Business Street Business City, BC 12345 Company",
+      "before_text": "[Page 1] DETAILED INVOICE From: ABC Corporation ",
+      "after_text": " Business Street Business City, BC 12345 Compan",
+      "value_type": "both",
+      "case_sensitive": false
+    },
+    {
+      "name": "Total_Amount",
+      "description": "Extract total amount from invoices",
+      "target_sentence": "Total: $1,234.56",
+      "before_text": "Total:",
+      "after_text": "",
+      "value_type": "number",
+      "case_sensitive": false
+    },
+    {
+      "name": "Company_Name",
+      "description": "Extract company name from documents",
+      "target_sentence": "Company: ABC Corporation Ltd.",
+      "before_text": "Company:",
+      "after_text": "",
+      "value_type": "text",
+      "case_sensitive": false
+    },
+    {
+      "name": "Customer_Name",
+      "description": "Extract customer name from documents",
+      "target_sentence": "Customer: John Smith",
+      "before_text": "Customer:",
+      "after_text": "",
+      "value_type": "text",
+      "case_sensitive": false
+    },
+    {
+      "name": "Due_Date",
+      "description": "Extract due date from invoices",
+      "target_sentence": "Due Date: 12/31/2024",
+      "before_text": "Due Date:",
+      "after_text": "",
+      "value_type": "number",
+      "case_sensitive": false
+    }
+  ]
+}
