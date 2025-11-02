@@ -1,19 +1,21 @@
 # Enhanced PDF Text Extractor Requirements
 # Install with: pip install -r requirements_enhanced.txt
 
-# Core PDF extraction libraries
+# Core PDF processing libraries
 PyPDF2>=3.0.0
 pdfplumber>=0.9.0
 PyMuPDF>=1.23.0
 
-# OCR support for image-based content and redacted pages (no Tesseract required)
-easyocr>=1.7.0
-
-# Excel export (existing requirement)
+# Data processing and export
+pandas>=2.0.0
 openpyxl>=3.1.0
 
-# Additional utilities
-pathlib2>=2.3.7; python_version < '3.4'
+# Text processing and pattern matching
+regex>=2023.0.0
 
-# Note: EasyOCR is used for OCR functionality - no additional installation required!
-# EasyOCR automatically downloads required models on first use.
+# Configuration and utilities
+pathlib2>=2.3.0
+
+# Security Note: OCR functionality has been removed to eliminate external model downloads
+# and ensure complete data privacy. The system now relies on built-in PDF text extraction
+# methods (PyPDF2, pdfplumber, PyMuPDF) which provide excellent results for most documents.

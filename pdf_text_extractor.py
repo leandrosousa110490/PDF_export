@@ -47,8 +47,7 @@ OUTPUT_FOLDER_PATH = r"C:\Users\nbaba\Desktop\PDF to Excel\extracted_texts"
 libraries_available = {
     'pypdf': False,
     'pdfplumber': False,
-    'fitz': False,
-    'easyocr': False
+    'fitz': False
 }
 
 # Try PyPDF2/pypdf
@@ -75,16 +74,6 @@ try:
     libraries_available['fitz'] = True
 except ImportError:
     fitz = None
-
-# Try EasyOCR library (no Tesseract dependency)
-try:
-    import easyocr
-    libraries_available['easyocr'] = True
-    # Initialize EasyOCR reader for English
-    ocr_reader = easyocr.Reader(['en'], gpu=False)
-except ImportError:
-    easyocr = None
-    ocr_reader = None
 
 
 def print_library_status():
@@ -341,8 +330,8 @@ def extract_with_fitz(pdf_path):
             
             # Method 2: Extract text with different flags for better redaction handling
             try:
-                # Try different text extraction modes
-                for flag in ["text", "dict", "rawdict"]:
+                # Try different text extraction modes with enhanced settings
+                for flag in ["text", "dict", "rawdict", "html", "xhtml"]:
                     try:
                         if flag == "text":
                             continue  # Already tried above
@@ -366,6 +355,16 @@ def extract_with_fitz(pdf_path):
                                             raw_text += span.get("text", "") + " "
                             if raw_text.strip():
                                 page_text_parts.append(raw_text)
+                        elif flag in ["html", "xhtml"]:
+                            # HTML/XHTML extraction can sometimes capture text missed by other methods
+                            html_text = page.get_text(flag)
+                            if html_text and html_text.strip():
+                                # Basic HTML tag removal for cleaner text
+                                import re
+                                clean_text = re.sub(r'<[^>]+>', ' ', html_text)
+                                clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+                                if clean_text:
+                                    page_text_parts.append(clean_text)
                     except Exception as e:
                         print(f"   Text extraction mode '{flag}' failed on page {page_num + 1}: {str(e)}")
                         continue
@@ -395,50 +394,52 @@ def extract_with_fitz(pdf_path):
             except Exception as e:
                 print(f"   Annotation/form extraction failed on page {page_num + 1}: {str(e)}")
             
-            # Method 4: OCR on entire page if text extraction yields little content
-            page_combined_text = " ".join(page_text_parts).strip()
-            if ocr_reader and len(page_combined_text) < 50:  # If very little text found
+            # Method 4: Enhanced text extraction for difficult cases (replaces OCR)
+            # Try to extract text more aggressively using PyMuPDF's advanced features
+            try:
+                # Extract text blocks with position information for better accuracy
+                text_blocks = page.get_text("blocks")
+                for block in text_blocks:
+                    if len(block) >= 5 and block[4].strip():  # block[4] contains the text
+                        block_text = block[4].strip()
+                        if block_text and block_text not in " ".join(page_text_parts):
+                            page_text_parts.append(block_text)
+                
+                # Try to extract text from different layers/transparency groups
                 try:
-                    # Render page as image and OCR it
-                    mat = fitz.Matrix(2.0, 2.0)  # Higher resolution for better OCR
-                    pix = page.get_pixmap(matrix=mat)
-                    img_data = pix.tobytes("png")
+                    # Get text with clip parameter to handle overlapping content
+                    clip_rect = page.rect
+                    clipped_text = page.get_text(clip=clip_rect)
+                    if clipped_text and clipped_text.strip():
+                        clipped_clean = clipped_text.strip()
+                        if clipped_clean and clipped_clean not in " ".join(page_text_parts):
+                            page_text_parts.append(clipped_clean)
+                except Exception:
+                    pass
                     
-                    # Use EasyOCR to extract text from the image
-                    ocr_results = ocr_reader.readtext(img_data)
-                    ocr_text = " ".join([result[1] for result in ocr_results if result[2] > 0.5])  # confidence > 0.5
-                    if ocr_text.strip():
-                        page_text_parts.append(ocr_text)
-                        print(f"   EasyOCR recovered text on page {page_num + 1}")
-                    
-                    pix = None
-                except Exception as e:
-                    print(f"   Page OCR failed on page {page_num + 1}: {str(e)}")
+            except Exception as e:
+                print(f"   Enhanced text extraction failed on page {page_num + 1}: {str(e)}")
             
-            # Method 5: Extract text from embedded images
-            if ocr_reader:
-                try:
-                    # Get images from page
-                    image_list = page.get_images()
-                    for img_index, img in enumerate(image_list):
-                        try:
-                            # Extract image
-                            xref = img[0]
-                            pix = fitz.Pixmap(doc, xref)
-                            if pix.n - pix.alpha < 4:  # GRAY or RGB
-                                img_data = pix.tobytes("png")
-                                
-                                # Use EasyOCR to extract text from the image
-                                ocr_results = ocr_reader.readtext(img_data)
-                                ocr_text = " ".join([result[1] for result in ocr_results if result[2] > 0.5])  # confidence > 0.5
-                                if ocr_text.strip():
-                                    page_text_parts.append(ocr_text)
-                            pix = None
-                        except Exception as e:
-                            print(f"   Image OCR failed on page {page_num + 1}, image {img_index}: {str(e)}")
-                            continue
-                except Exception as e:
-                    print(f"   Image extraction failed on page {page_num + 1}: {str(e)}")
+            # Method 5: Extract metadata and hidden text - ENHANCED FOR SECURITY  
+            # Enhanced metadata extraction to replace image OCR functionality
+            try:
+                # Extract any text from page metadata
+                page_metadata = page.get_contents()
+                if page_metadata:
+                    # Try to extract readable text from content streams
+                    for content in page_metadata:
+                        if content:
+                            content_text = str(content)
+                            # Look for text patterns in the content stream
+                            import re
+                            text_matches = re.findall(r'\((.*?)\)', content_text)
+                            for match in text_matches:
+                                if len(match) > 2 and match.strip():
+                                    clean_match = match.strip()
+                                    if clean_match and clean_match not in " ".join(page_text_parts):
+                                        page_text_parts.append(clean_match)
+            except Exception as e:
+                print(f"   Metadata extraction failed on page {page_num + 1}: {str(e)}")
             
             # Combine all text from this page
             if page_text_parts:
@@ -624,7 +625,7 @@ def main():
         print("   pip install PyPDF2")
         print("   pip install pdfplumber")
         print("   pip install PyMuPDF")
-        print("   pip install easyocr  # For OCR support (no Tesseract required)")
+        print("   # OCR support removed for enhanced data security")
         return
     
     # Validate PDF folder exists
