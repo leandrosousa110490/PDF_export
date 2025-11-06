@@ -8,15 +8,33 @@
     {
       "name": "Invoice_Number",
       "description": "Extract invoice number from documents",
-      "target_sentence": "DOC-2024-001 Section 2: Sensitive Information Employee ID: EMP-12345 Social Security: 123 Credit Card: 45 Section 3:",
-      "before_text": "DOC-2024-001 Section 2: Sensitive Information Employee ID: EMP-12345 ",
-      "after_text": "! Security: 123 Credit Card: 45 Section 3:",
+      "target_sentence": "[Page 1] DETAILED INVOICE From: ABC Corporation 123 Business Street Business City, BC 12345 Company",
+      "before_text": "[Page 1] DETAILED INVOICE From: ABC Corporation ",
+      "after_text": " Business Street Business City, BC 12345 Compan",
       "value_type": "both",
       "case_sensitive": false,
       "else_if": [
-        { "target_sentence": "[Page 1] COMPLEX DOCUMENT TEST Section 1: Regular Text This is normal selectable text. Company: ABC Corporation Document ID", "before_text": "[Page 1] COMPLEX DOCUMENT TEST Section 1: Regular Text This is normal ", "after_text": " text. Company: ABC Corporation Document ID" },
-        { "target_sentence": "Invoice #: INV-2024010", "before_text": "Invoice #", "after_text": "" },
-        { "target_sentence": "Invoice ID: INV-2024010", "before_text": "Invoice ID:", "after_text": "" }
+        {
+          "target_sentence": "Invoice Number: INV-2024010 Date: 10/11/2025 Customer Name: John Smith Description Quantity Price Total Consulting Services",
+          "before_text": "Invoice Number: INV-2024010 Date: ",
+          "after_text": " Customer Name: John Smith Description Quantity Price Total Consulting Services",
+          "value_type": "both",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Invoice No.: INV-2024-001",
+          "before_text": "Invoice No.:",
+          "after_text": "",
+          "value_type": "both",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Invoice: INV-2024-001 Date:",
+          "before_text": "Invoice:",
+          "after_text": "Date:",
+          "value_type": "both",
+          "case_sensitive": false
+        }
       ]
     },
     {
@@ -28,11 +46,27 @@
       "value_type": "number",
       "case_sensitive": false,
       "else_if": [
-        { "target_sentence": "Amount Due: $1,234.56", "before_text": "Amount Due:", "after_text": "" },
-        { "target_sentence": "Balance Due: $1,234.56", "before_text": "Balance Due:", "after_text": "" },
-        { "target_sentence": "Grand Total: $1,234.56", "before_text": "Grand Total:", "after_text": "" },
-        { "target_sentence": "Total Due: $1,234.56", "before_text": "Total Due:", "after_text": "" },
-        { "target_sentence": "Total Amount: $1,234.56", "before_text": "Total Amount:", "after_text": "" }
+        {
+          "target_sentence": "Amount Due: $1,234.56",
+          "before_text": "Amount Due:",
+          "after_text": "",
+          "value_type": "number",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Balance Due: $1,234.56",
+          "before_text": "Balance Due:",
+          "after_text": "",
+          "value_type": "number",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Total Amount: $1,234.56",
+          "before_text": "Total Amount:",
+          "after_text": "",
+          "value_type": "number",
+          "case_sensitive": false
+        }
       ]
     },
     {
@@ -44,10 +78,27 @@
       "value_type": "text",
       "case_sensitive": false,
       "else_if": [
-        { "target_sentence": "From: ABC Corporation", "before_text": "From:", "after_text": "" },
-        { "target_sentence": "Vendor: ABC Corporation", "before_text": "Vendor:", "after_text": "" },
-        { "target_sentence": "Seller: ABC Corporation", "before_text": "Seller:", "after_text": "" },
-        { "target_sentence": "Company: ABC Corporation", "before_text": "Company:", "after_text": "" }
+        {
+          "target_sentence": "Vendor: ABC Corporation",
+          "before_text": "Vendor:",
+          "after_text": "",
+          "value_type": "text",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "From: ABC Corporation",
+          "before_text": "From:",
+          "after_text": "",
+          "value_type": "text",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Company Name: ABC Corporation",
+          "before_text": "Company Name:",
+          "after_text": "",
+          "value_type": "text",
+          "case_sensitive": false
+        }
       ]
     },
     {
@@ -59,10 +110,20 @@
       "value_type": "text",
       "case_sensitive": false,
       "else_if": [
-        { "target_sentence": "Bill To: John Smith", "before_text": "Bill To:", "after_text": "" },
-        { "target_sentence": "Billed To: John Smith", "before_text": "Billed To:", "after_text": "" },
-        { "target_sentence": "Customer: John Smith", "before_text": "Customer:", "after_text": "" },
-        { "target_sentence": "Client: John Smith", "before_text": "Client:", "after_text": "" }
+        {
+          "target_sentence": "Bill To: John Smith",
+          "before_text": "Bill To:",
+          "after_text": "",
+          "value_type": "text",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Customer Name: John Smith",
+          "before_text": "Customer Name:",
+          "after_text": "",
+          "value_type": "text",
+          "case_sensitive": false
+        }
       ]
     },
     {
@@ -74,9 +135,20 @@
       "value_type": "number",
       "case_sensitive": false,
       "else_if": [
-        { "target_sentence": "Due: 12/31/2024", "before_text": "Due:", "after_text": "" },
-        { "target_sentence": "Payment Due: 12/31/2024", "before_text": "Payment Due:", "after_text": "" },
-        { "target_sentence": "Due On: 12/31/2024", "before_text": "Due On:", "after_text": "" }
+        {
+          "target_sentence": "Due: 12/31/2024",
+          "before_text": "Due:",
+          "after_text": "",
+          "value_type": "number",
+          "case_sensitive": false
+        },
+        {
+          "target_sentence": "Payment Due: 12/31/2024",
+          "before_text": "Payment Due:",
+          "after_text": "",
+          "value_type": "number",
+          "case_sensitive": false
+        }
       ]
     }
   ]
