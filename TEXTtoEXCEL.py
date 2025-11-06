@@ -33,100 +33,66 @@ def get_value_pattern(value_type):
     }
     return patterns.get(value_type, r'.+?')  # Default to any character if type not recognized
 
-def validate_config(config):
-    """Enforce that every else_if alternative includes a target_sentence."""
-    try:
-        rules = config.get('extraction_rules', [])
-        total_alts = 0
-        kept_alts = 0
-        for rule in rules:
-            alts = rule.get('else_if', [])
-            if not isinstance(alts, list):
-                continue
-            total_alts += len(alts)
-            validated = []
-            for alt in alts:
-                if alt.get('target_sentence'):
-                    validated.append(alt)
-                else:
-                    print(f"  ⚠ else_if for '{rule.get('name','unknown')}' missing target_sentence; skipping.")
-            rule['else_if'] = validated
-            kept_alts += len(validated)
-        if total_alts > 0:
-            print(f"Config validation: kept {kept_alts}/{total_alts} else_if alternatives that include target_sentence.")
-    except Exception as e:
-        print(f"Error validating config: {e}")
-    return config
+def extract_value_with_anchors(text, subrule, flags):
+    """Strictly extract using exact before/after anchors. No fuzzy fallbacks."""
+    before_text = subrule.get('before_text', '')
+    after_text = subrule.get('after_text', '')
+    value_type = subrule.get('value_type', 'both')
+    value_pattern = get_value_pattern(value_type)
 
-def extract_by_target_sentence(text, rule):
-    """Extract within a local window around the target_sentence to improve precision."""
-    try:
-        target_sentence = rule.get('target_sentence')
-        if not target_sentence:
-            return None
+    # Exact match with both anchors
+    if before_text and after_text:
+        pattern = re.escape(before_text) + '(' + value_pattern + ')' + re.escape(after_text)
+        match = re.search(pattern, text, flags)
+        if match:
+            return match.group(1).strip()
 
+    # Exact match with only before_text
+    if before_text and not after_text:
+        # First, try strict end-of-line or end-of-string boundary
+        pattern_eol = re.escape(before_text) + '(' + value_pattern + ')(?:\r?\n|$)'
+        match = re.search(pattern_eol, text, flags)
+        if match:
+            return match.group(1).strip()
+
+        # Fallback: allow whitespace boundary (still exact before_text anchor)
+        pattern_ws = re.escape(before_text) + '(' + value_pattern + ')(?:\s|$|\n)'
+        match = re.search(pattern_ws, text, flags)
+        if match:
+            return match.group(1).strip()
+
+    # Exact match with only after_text
+    if after_text and not before_text:
+        pattern = '(' + value_pattern + ')' + re.escape(after_text)
+        match = re.search(pattern, text, flags)
+        if match:
+            return match.group(1).strip()
+
+    return None
+
+def extract_value_strict(text, rule):
+    """Extract value using strict anchors and else-if alternatives."""
+    try:
         case_sensitive = rule.get('case_sensitive', False)
         flags = 0 if case_sensitive else re.IGNORECASE
 
-        match = re.search(re.escape(target_sentence), text, flags)
-        if not match:
-            # Fallback: try locating by significant words from the target_sentence
-            words = [w for w in re.findall(r"\w+", target_sentence) if len(w) > 3]
-            for w in words:
-                m = re.search(re.escape(w), text, flags)
-                if m:
-                    match = m
-                    break
+        # Primary rule
+        primary = extract_value_with_anchors(text, rule, flags)
+        if primary:
+            return primary
 
-        if not match:
-            return None
-
-        # Define a window around the found location to constrain matching
-        start_idx = max(match.start() - 300, 0)
-        end_idx = min(match.end() + 300, len(text))
-        window = text[start_idx:end_idx]
-
-        before_text = rule.get('before_text', '')
-        after_text = rule.get('after_text', '')
-        value_type = rule.get('value_type', 'both')
-        value_pattern = get_value_pattern(value_type)
-
-        # Prefer strict anchors within the window
-        if before_text and after_text:
-            pattern = re.escape(before_text) + r'\s*(' + value_pattern + r')\s*' + re.escape(after_text)
-            m = re.search(pattern, window, flags)
-            if m:
-                return m.group(1).strip()
-
-        # Before-text only within window
-        if before_text:
-            pattern = re.escape(before_text) + r'\s*(' + value_pattern + r')(?:\s|$|\n)'
-            m = re.search(pattern, window, flags)
-            if m:
-                extracted = m.group(1).strip()
-                extracted = re.sub(r'[,\.\s]+$', '', extracted)
-                return extracted
-
-        # After-text only within window (value preceding after_text)
-        if after_text:
-            pattern = r'(' + value_pattern + r')\s*' + re.escape(after_text)
-            m = re.search(pattern, window, flags)
-            if m:
-                extracted = m.group(1).strip()
-                extracted = re.sub(r'[,\.\s]+$', '', extracted)
-                return extracted
-
-        # As a last attempt, use significant words from the target sentence as anchors
-        words = [w for w in re.findall(r"\w+", target_sentence) if len(w) > 3]
-        for w in words:
-            pattern = re.escape(w) + r'\s*[:\-]?\s*(' + value_pattern + r')'
-            m = re.search(pattern, window, flags)
-            if m:
-                return m.group(1).strip()
+        # Else-if chain
+        for alt in rule.get('else_if', []) or []:
+            alt_case = alt.get('case_sensitive', case_sensitive)
+            alt_flags = 0 if alt_case else re.IGNORECASE
+            found = extract_value_with_anchors(text, alt, alt_flags)
+            if found:
+                return found
 
         return None
+
     except Exception as e:
-        print(f"Error in extract_by_target_sentence for rule {rule.get('name','unknown')}: {e}")
+        print(f"Error extracting value with rule {rule.get('name', 'unknown')}: {e}")
         return None
 
 def extract_value(text, rule):
@@ -176,7 +142,7 @@ def extract_value(text, rule):
         
         # Method 4: Fallback - use target_sentence as reference
         target_sentence = rule.get('target_sentence', '')
-        if target_sentence and before_text and not after_text:
+        if target_sentence and before_text:
             # Try to find similar patterns in the text
             pattern = re.escape(before_text) + r'\s*(' + value_pattern + r')(?:\s|$|\n)'
             match = re.search(pattern, text, flags)
@@ -191,34 +157,6 @@ def extract_value(text, rule):
     except Exception as e:
         print(f"Error extracting value with rule {rule.get('name', 'unknown')}: {e}")
         return None
-
-def extract_value_with_fallback(text, rule):
-    """Try primary rule, then else-if alternatives if primary fails"""
-    # Try primary rule first
-    primary_value = extract_value(text, rule)
-    if primary_value:
-        return primary_value, None
-
-    # Try alternatives specified in 'else_if'
-    alternatives = rule.get('else_if', []) or []
-    for alt in alternatives:
-        # Merge parent rule with alternative, allowing alternative to override fields
-        merged = dict(rule)
-        # Do not propagate parent's else_if into merged to avoid loops
-        merged.pop('else_if', None)
-        # Keep the same target name for output; ignore alt 'name' if present
-        alt_no_name = {k: v for k, v in alt.items() if k != 'name'}
-        merged.update(alt_no_name)
-
-        alt_value = None
-        if merged.get('target_sentence'):
-            alt_value = extract_by_target_sentence(text, merged)
-        if not alt_value:
-            alt_value = extract_value(text, merged)
-        if alt_value:
-            return alt_value, alt
-
-    return None, None
 
 def process_text_files(config):
     """Process all text files and extract values according to configuration"""
@@ -250,7 +188,7 @@ def process_text_files(config):
         # Apply each extraction rule
         for rule in extraction_rules:
             rule_name = rule.get('name', 'unknown')
-            extracted_value, used_alt = extract_value_with_fallback(text_content, rule)
+            extracted_value = extract_value_strict(text_content, rule)
             
             # Always add a result for each rule, whether successful or not
             if extracted_value:
@@ -259,10 +197,7 @@ def process_text_files(config):
                     'Config_Name': rule_name,
                     'Extracted_Value': extracted_value
                 })
-                if used_alt:
-                    print(f"  ✓ {rule_name}: {extracted_value} (fallback)")
-                else:
-                    print(f"  ✓ {rule_name}: {extracted_value}")
+                print(f"  ✓ {rule_name}: {extracted_value}")
             else:
                 results.append({
                     'Filename': filename,
@@ -322,9 +257,6 @@ def main():
     
     print("🔍 Starting value extraction process...")
     print(f"Configuration loaded from: {config_file}")
-    
-    # Validate that all else_if alternatives include target_sentence
-    config = validate_config(config)
     
     # Process text files and extract values
     results = process_text_files(config)
